@@ -147,7 +147,7 @@ class ICMPPing(NetworkApplication):
         timeOfReceipt = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout)
         # 4. Close ICMP socket
         icmpSocket.close()  # may need to pass in a fd (file descriptor)
-        # 5. Print out the delay
+        # 5. Print out the delay 
         journeyTime = timeOfReceipt - timeOfSending
         self.printOneResult(destinationAddress, packetLength, journeyTime, seq_num, ttl, destinationHostname)
         
