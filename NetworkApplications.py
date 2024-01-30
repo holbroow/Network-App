@@ -53,7 +53,6 @@ def setupArgumentParser() -> argparse.Namespace:
         args = parser.parse_args()
         return args
 
-
 class NetworkApplication:
 
     def checksum(self, dataToChecksum: str) -> str:
@@ -108,6 +107,7 @@ class NetworkApplication:
         else:
             print("%d %s" % (ttl, latencies))
 
+# DONE
 class ICMPPing(NetworkApplication):
 
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
@@ -116,14 +116,12 @@ class ICMPPing(NetworkApplication):
         # 3. Unpack the imcp and ip headers for useful information, including Identifier, TTL, sequence number 
         # 5. Check that the Identifier (ID) matches between the request and reply
         # 6. Return time of receipt, TTL, packetSize, sequence number
-        
+
         icmpSocket.settimeout(timeout)
     
         try:
-            timeStart = time.time()
             recievedPacket, addr = icmpSocket.recvfrom(1024)
-            timeEnd = time.time()
-            timeReceived = (timeEnd - timeStart) * 1000  # Convert to milliseconds
+            timeReceived = time.time()
 
             # Fetch the ICMP header from the received packet
             icmpHeader = recievedPacket[20:28]
@@ -185,7 +183,7 @@ class ICMPPing(NetworkApplication):
 
         # 5. Print out the delay
         try:
-            delay = timeRecieved - timeSent
+            delay = (timeRecieved - timeSent) * 1000
             self.printOneResult(destinationAddress, packetLength, delay, seq_num, ttl, args.hostname)
         except:
             # Handle the exception where variables may be null due to a failed request
@@ -211,13 +209,13 @@ class ICMPPing(NetworkApplication):
             self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
             
-
-
+# TODO
 class Traceroute(NetworkApplication):
 
     def __init__(self, args):
         print('Traceroute to: %s...' % (args.hostname))
 
+# TODO
 class WebServer(NetworkApplication):
 
     def handleRequest(tcpSocket):
@@ -238,7 +236,7 @@ class WebServer(NetworkApplication):
         # 4. When a connection is accepted, call handleRequest function, passing new connection socket (see https://docs.python.org/3/library/socket.html#socket.socket.accept)
         # 5. Close server socket
 
-
+# TODO
 class Proxy(NetworkApplication):
 
     def __init__(self, args):
