@@ -143,17 +143,18 @@ class ICMPPing(NetworkApplication):
 
         pass
 
+
     def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num):
         # 1. Build ICMP header
         header = struct.pack("bbHHh", 8, 0, 0, ID, seq_num)
         data = b'Hello, Server!'
+        packet = header + data
 
         # 2. Checksum ICMP packet using given function
-        packet = header + data
         checksum = self.checksum(packet)
 
         # 3. Insert checksum into packet
-        header = struct.pack("bbHHh", 8, 0, socket.htons(checksum), ID, seq_num)
+        header = struct.pack("bbHHh", 8, 0, checksum, ID, seq_num)
         packet = header + data
 
         # 4. Send packet using socket
@@ -163,6 +164,7 @@ class ICMPPing(NetworkApplication):
         return time.time()
         
         pass
+
 
     def doOnePing(self, destinationAddress, packetID, seq_num, timeout):
         # 1. Create ICMP socket
@@ -190,6 +192,7 @@ class ICMPPing(NetworkApplication):
             pass
 
         pass
+
 
     def __init__(self, args):
         print('Ping to: %s...' % (args.hostname))
