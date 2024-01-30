@@ -110,31 +110,50 @@ class NetworkApplication:
 
 class ICMPPing(NetworkApplication):
 
-    def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout):
+    def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
         # 1. Wait for the socket to receive a reply
-        
         # 2. If reply received, record time of receipt, otherwise, handle timeout
-        
         # 3. Unpack the imcp and ip headers for useful information, including Identifier, TTL, sequence number 
-        
         # 5. Check that the Identifier (ID) matches between the request and reply
-        
         # 6. Return time of receipt, TTL, packetSize, sequence number
-        
-        
+        icmpSocket.settimeout(timeout)
+    
+        try:
+            timeStart = time.time()
+            recievedPacket, addr = icmpSocket.recvfrom(1024)
+            timeEnd = time.time()
+            timeReceived = (timeEnd - timeStart) * 1000  # Convert to milliseconds
+
+            # Fetch the ICMP header from the received packet
+            icmpHeader = recievedPacket[20:28]
+
+            # Unpack the ICMP header to extract information
+            type, code, checksum, packetID, seq = struct.unpack("bbHHh", icmpHeader)
+
+            # Check if the packet is an ICMP Echo Reply and has the correct ID
+            if type == 0 and packetID == ID:
+                packetLength = len(recievedPacket)
+                ttl = struct.unpack("bb", recievedPacket[8:10])[1]
+                return timeReceived, ttl, packetLength, seq
+        except socket.timeout:
+            return None, None, None, None
+
         pass
 
-    def sendOnePing(self, icmpSocket, destinationAddress, ID):
+    def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num):
         # 1. Build ICMP header
-        
+        header = struct.pack("bbHHh", 8, 0, 0, ID, seq_num)
+        data = b'Hello, Server!'
         # 2. Checksum ICMP packet using given function
-        
+        packet = header + data
+        checksum = self.checksum(packet)
         # 3. Insert checksum into packet
-        
+        header = struct.pack("bbHHh", 8, 0, socket.htons(checksum), ID, seq_num)
+        packet = header + data
         # 4. Send packet using socket
-        
+        icmpSocket.send(packet, destinationAddress, 80)
         # 5. Return time of sending
-        
+        return time.time()
         
         pass
 
@@ -142,26 +161,26 @@ class ICMPPing(NetworkApplication):
         # 1. Create ICMP socket
         icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
         # 2. Call sendOnePing function
-        timeOfSending = self.sendOnePing(icmpSocket, destinationAddress, packetID)
+        timeOfSending = self.sendOnePing(icmpSocket, destinationAddress, packetID, seq_num)
         # 3. Call receiveOnePing function
-        timeOfReceipt = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout)
+        timeOfReceipt = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout, seq_num)
         # 4. Close ICMP socket
         icmpSocket.close()  # may need to pass in a fd (file descriptor)
         # 5. Print out the delay
-        journeyTime = timeOfReceipt - timeOfSending
-        self.printOneResult(destinationAddress, packetLength, journeyTime, seq_num, ttl, destinationHostname)
+        delay = timeOfReceipt - timeOfSending
+        self.printOneResult(destinationAddress, packetLength, delay, seq_num, ttl, args.hostname)
         
         pass
 
     def __init__(self, args):
         print('Ping to: %s...' % (args.hostname))
         # 1. Look up hostname, resolving it to an IP address
-        destinationAddress = socket.gethostbyname('google.com')
+        destinationAddress = socket.gethostbyname(args.hostname)
         # 2. Repeat below args.count times
         # 3. Call doOnePing function, approximately every second, below is just an example
         for i in range(args.count):
             # Call doOnePing function, approximately every second
-            self.doOnePing(destinationAddress, i, i, 2)
+            self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
             
 
