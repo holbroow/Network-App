@@ -110,7 +110,7 @@ class NetworkApplication:
 # DONE
 class ICMPPing(NetworkApplication):
 
-    def receivePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
+    def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
         # 1. Wait for the socket to receive a reply
         # 2. If reply received, record time of receipt, otherwise, handle timeout
         # 3. Unpack the imcp and ip headers for useful information, including Identifier, TTL, sequence number 
