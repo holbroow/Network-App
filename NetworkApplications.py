@@ -110,7 +110,7 @@ class NetworkApplication:
 # DONE
 class ICMPPing(NetworkApplication):
 
-    def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
+    def receivePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
         # 1. Wait for the socket to receive a reply
         # 2. If reply received, record time of receipt, otherwise, handle timeout
         # 3. Unpack the imcp and ip headers for useful information, including Identifier, TTL, sequence number 
@@ -212,8 +212,104 @@ class ICMPPing(NetworkApplication):
 # TODO
 class Traceroute(NetworkApplication):
 
+    def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
+        icmpSocket.settimeout(timeout)
+    
+        try:
+            receivedPacket, addr = icmpSocket.recvfrom(1024)
+            timeReceived = time.time()
+
+            # Fetch the IP header from the received packet
+            ipHeader = receivedPacket[:20]
+
+            # Unpack the IP header to extract TTL
+            ttl = struct.unpack("B", ipHeader[8:9])[0]
+
+            # Fetch the ICMP header from the received packet
+            icmpHeader = receivedPacket[20:28]
+
+            # Unpack the ICMP header to extract information
+            type, code, checksum, packetID, seq = struct.unpack("bbHHh", icmpHeader)
+
+            # Check if the packet is an ICMP Time Exceeded and has the correct ID
+            if type == 11 and packetID == ID:
+                return timeReceived, ttl
+
+        except socket.timeout:
+            print(f"{seq_num}: *")
+            return None
+
+    def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num):
+        # 1. Build ICMP header
+        header = struct.pack("bbHHh", 8, 0, 0, ID, seq_num)
+        data = b'Hello, Server!'
+        packet = header + data
+
+        # 2. Checksum ICMP packet using given function
+        checksum = self.checksum(packet)
+
+        # 3. Insert checksum into packet
+        header = struct.pack("bbHHh", 8, 0, checksum, ID, seq_num)
+        packet = header + data
+
+        # 4. Send packet using socket
+        icmpSocket.sendto(packet, (destinationAddress, 80))
+
+        # 5. Return time of sending
+        return time.time()
+
+    def doOnePing(self, destinationAddress, packetID, seq_num, timeout):
+        # 1. Create ICMP socket
+        icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+
+        # 2. Set the TTL for the socket
+        icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, seq_num + 1)
+
+        # 3. Call sendOnePing function
+        timeSent = self.sendOnePing(icmpSocket, destinationAddress, packetID, seq_num)
+
+        # 4. Call receiveOnePing function
+        try:
+            timeReceived, ttl = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout, seq_num)
+        except:
+            # Handle the exception where variables may be null due to a failed request
+            pass
+
+        # 5. Close ICMP socket
+        icmpSocket.close()
+
+        # 6. Print out the result
+        try:
+            if timeReceived is not None:
+                delay = (timeReceived - timeSent) * 1000
+                print(f"{seq_num}: {destinationAddress}  {delay:.3f} ms  TTL={ttl}")
+        except:
+            # Handle the exception where variables may be null due to a failed request
+            pass
+
+
+
+
+    def runTraceroute(self, destination, max_hops=30):
+        for seq_num in range(1, max_hops + 1):
+            self.doOnePing(destination, 1, seq_num, 1)
+
+
     def __init__(self, args):
-        print('Traceroute to: %s...' % (args.hostname))
+        print(f'Traceroute to: {args.hostname}...')
+
+        # Look up hostname, resolving it to an IP address
+        try:
+            destination_address = socket.gethostbyname(args.hostname)
+        except socket.gaierror:
+            print("Hostname not known. Lookup failed.")
+            exit(-1)
+
+        # Perform the traceroute
+        max_hops = 30
+        self.runTraceroute(destination_address, max_hops)
+    
+
 
 # TODO
 class WebServer(NetworkApplication):
