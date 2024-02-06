@@ -317,23 +317,6 @@ class Traceroute(NetworkApplication):
 
 # TODO
 class WebServer(NetworkApplication):
-
-    # def handleRequest(tcpSocket):
-    #     # 1. Receive request message from the client on connection socket
-    #     address, data = tcpSocket.recv(4096)
-    #     # 2. Extract the path of the requested object from the message (second part of the HTTP header)
-    #     # 3. Read the corresponding file from disk
-        
-    #     # 4. Store in temporary buffer
-        
-    #     # 5. Send the correct HTTP response error
-        
-    #     # 6. Send the content of the file to the socket
-        
-    #     # 7. Close the connection socket
-        
-
-    #     pass
     
     def handleRequest(self, client_socket):
         # 1. Receive request message from the client on connection socket
