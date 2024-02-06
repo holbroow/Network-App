@@ -209,7 +209,7 @@ class ICMPPing(NetworkApplication):
             self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
             
-# TODO
+# TODO NEED TO FIGURE OUT THE PRINT STATENMENT AND HANDLING THE HOPS VS THE END OF THE ROUTE
 class Traceroute(NetworkApplication):
 
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
@@ -258,31 +258,36 @@ class Traceroute(NetworkApplication):
         # 5. Return time of sending
         return time.time()
 
-    def doOnePing(self, destinationAddress, packetID, seq_num, timeout):
-        # 1. Create ICMP socket
-        icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+    def doOneTracerouteIteration(self, destinationAddress, packetID, seq_num, timeout):
+        # 1. Create ICMP/UDP socket
+        if args.protocol == "udp":
+            # UDP SOCKET CREATION HERE
+            exit(-1)
+        else:
+            socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
         # 2. Set the TTL for the socket
-        icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, seq_num + 1)
+        socket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, seq_num + 1)
 
         # 3. Call sendOnePing function
-        timeSent = self.sendOnePing(icmpSocket, destinationAddress, packetID, seq_num)
+        timeSent = self.sendOnePing(socket, destinationAddress, packetID, seq_num)
 
         # 4. Call receiveOnePing function
         try:
-            timeReceived, ttl = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout, seq_num)
+            timeReceived, ttl,  = self.receiveOnePing(socket, destinationAddress, packetID, timeout, seq_num)
         except:
             # Handle the exception where variables may be null due to a failed request
             pass
 
         # 5. Close ICMP socket
-        icmpSocket.close()
+        socket.close()
 
         # 6. Print out the result
         try:
             if timeReceived is not None:
                 delay = (timeReceived - timeSent) * 1000
-                print(f"{seq_num}: {destinationAddress}  {delay:.3f} ms  TTL={ttl}")
+                #self.printOneTraceRouteIteration(self, ttl, destinationAddress, measurements, destinationHostname)
+                
         except:
             # Handle the exception where variables may be null due to a failed request
             pass
@@ -310,27 +315,69 @@ class Traceroute(NetworkApplication):
         self.runTraceroute(destination_address, max_hops)
     
 
-
 # TODO
 class WebServer(NetworkApplication):
 
-    def handleRequest(tcpSocket):
+    # def handleRequest(tcpSocket):
+    #     # 1. Receive request message from the client on connection socket
+    #     address, data = tcpSocket.recv(4096)
+    #     # 2. Extract the path of the requested object from the message (second part of the HTTP header)
+    #     # 3. Read the corresponding file from disk
+        
+    #     # 4. Store in temporary buffer
+        
+    #     # 5. Send the correct HTTP response error
+        
+    #     # 6. Send the content of the file to the socket
+        
+    #     # 7. Close the connection socket
+        
+
+    #     pass
+    
+    def handleRequest(self, client_socket):
         # 1. Receive request message from the client on connection socket
+        request = client_socket.recv(1024).decode('utf-8')
         # 2. Extract the path of the requested object from the message (second part of the HTTP header)
+        lines = request.split('\n')
+        filename = lines[0].split()[1]
+        if filename == '/':
+            filename = '/index.html'
         # 3. Read the corresponding file from disk
+        try:
+            with open(os.getcwd() + filename, 'rb') as file:
+                content = file.read()
+            response = 'HTTP/1.0 200 OK\n\n'.encode('utf-8')
+        except FileNotFoundError:
+            content = 'File Not Found'.encode('utf-8')
+            response = 'HTTP/1.0 404 NOT FOUND\n\n'.encode('utf-8')
         # 4. Store in temporary buffer
+        final_response = response + content
         # 5. Send the correct HTTP response error
         # 6. Send the content of the file to the socket
+        client_socket.send(final_response)
         # 7. Close the connection socket
-        pass
+        client_socket.close()
+
 
     def __init__(self, args):
         print('Web Server starting on port: %i...' % (args.port))
         # 1. Create server socket
+        web_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # 2. Bind the server socket to server address and server port
+        web_socket.bind(("127.0.0.1", args.port))
         # 3. Continuously listen for connections to server socket
-        # 4. When a connection is accepted, call handleRequest function, passing new connection socket (see https://docs.python.org/3/library/socket.html#socket.socket.accept)
+        web_socket.listen(1)
+        print('Listening on port %i...' % (args.port))
+        # 4. When a connection is accepted, call handleRequest function, passing new connection socket
+        connection_handled = False
+        while (connection_handled == False):
+            clientSocket, addr = web_socket.accept()
+            print(f"Accepted connection from: {addr[0]}:{addr[1]}")
+            self.handleRequest(clientSocket)
+            connection_handled = True
         # 5. Close server socket
+        web_socket.close()
 
 # TODO
 class Proxy(NetworkApplication):
