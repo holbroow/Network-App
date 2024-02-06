@@ -261,16 +261,16 @@ class Traceroute(NetworkApplication):
     def doOneTracerouteIteration(self, destinationAddress, packetID, seq_num, timeout):
         # 1. Create ICMP/UDP socket
         if args.protocol == "udp":
-            # UDP SOCKET CREATION HERE
+            # UDP SOCKET CREATION HERE (TODO)
             exit(-1)
         else:
-            socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+            my_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
         # 2. Set the TTL for the socket
-        socket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, seq_num + 1)
+        my_socket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, seq_num + 1)
 
         # 3. Call sendOnePing function
-        timeSent = self.sendOnePing(socket, destinationAddress, packetID, seq_num)
+        timeSent = self.sendOnePing(my_socket, destinationAddress, packetID, seq_num)
 
         # 4. Call receiveOnePing function
         try:
@@ -280,24 +280,23 @@ class Traceroute(NetworkApplication):
             pass
 
         # 5. Close ICMP socket
-        socket.close()
+        my_socket.close()
 
         # 6. Print out the result
         try:
             if timeReceived is not None:
                 delay = (timeReceived - timeSent) * 1000
-                #self.printOneTraceRouteIteration(self, ttl, destinationAddress, measurements, destinationHostname)
+                self.printOneTraceRouteIteration(self, ttl, destinationAddress, measurements, socket.gethostbyaddr(destinationAddress))
+                self.printOneResult(destinationAddress, packetLength, time.time(), seq_num, ttl, socket.gethostbyaddr(destinationAddress))
                 
         except:
             # Handle the exception where variables may be null due to a failed request
             pass
 
 
-
-
     def runTraceroute(self, destination, max_hops=30):
         for seq_num in range(1, max_hops + 1):
-            self.doOnePing(destination, 1, seq_num, 1)
+            self.doOneTracerouteIteration(destination, 1, seq_num, 1)
 
 
     def __init__(self, args):
@@ -313,9 +312,8 @@ class Traceroute(NetworkApplication):
         # Perform the traceroute
         max_hops = 30
         self.runTraceroute(destination_address, max_hops)
-    
 
-# TODO
+# DONE
 class WebServer(NetworkApplication):
     
     def handleRequest(self, client_socket):
