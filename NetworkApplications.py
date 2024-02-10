@@ -211,82 +211,87 @@ class ICMPPing(NetworkApplication):
             
 # TODO NEED TO FIGURE OUT THE PRINT STATENMENT AND HANDLING THE HOPS VS THE END OF THE ROUTE
 class Traceroute(NetworkApplication):
+	# 	Start with a TTL of 1
+	# 	send imp echo request (same as ping) to destination with the current TTL
+	# 	wait fro response
+	# 	 	if response == time exceeded message, print details such as address and increase ttl, repeat
+	# 	 	else if there is an echo reply, reached destination print and exit
+	# 	repeat 2-4 until said echo reply is received
+	# 	make sure to handle exceptions where there are no responses, in this case, print a * and move on
 
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
-        # 1. Wait for the socket to receive a reply
-        # 2. If reply received, record time of receipt, otherwise, handle timeout
-        # 3. Unpack the imcp and ip headers for useful information, including Identifier, TTL, sequence number 
-        # 5. Check that the Identifier (ID) matches between the request and reply
-        # 6. Return time of receipt, TTL, packetSize, sequence number
-
         icmpSocket.settimeout(timeout)
     
         try:
             recievedPacket, addr = icmpSocket.recvfrom(1024)
             timeReceived = time.time()
 
-            # Fetch the ICMP header from the received packet
             icmpHeader = recievedPacket[20:28]
-
-            # Unpack the ICMP header to extract information
             type, code, checksum, packetID, seq = struct.unpack("bbHHh", icmpHeader)
 
-            # Check if the packet is an ICMP Echo Reply and has the correct ID
             if type == 0 and packetID == ID:
                 packetLength = len(recievedPacket)
                 ttl = struct.unpack("bb", recievedPacket[8:10])[1]
-                return timeReceived, ttl, packetLength, seq
+                return timeReceived, ttl, packetLength, seq, addr[0]
+            elif type == 11 and packetID == ID:
+                return None, None, None, None, addr[0]
             
         except socket.timeout:
             print("Error, request timed-out.")
-            return None
+            return None, None, None, None, None
 
-        pass
 
-    def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num):
-        # 1. Build ICMP header
+    def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num, ttl):
         header = struct.pack("bbHHh", 8, 0, 0, ID, seq_num)
         data = b'Hello, Server!'
         packet = header + data
 
-        # 2. Checksum ICMP packet using given function
         checksum = self.checksum(packet)
 
-        # 3. Insert checksum into packet
         header = struct.pack("bbHHh", 8, 0, checksum, ID, seq_num)
         packet = header + data
 
-        # 4. Send packet using socket
+        icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
         icmpSocket.sendto(packet, (destinationAddress, 80))
 
-        # 5. Return time of sending
         return time.time()
 
-    # set the ttl to the seq_num and send a ping with said ttl, on reciept, grab the ip/hostname and print other info
-    # if no response, print a '*'
-    def doOneTracerouteIteration(self, destinationAddress, packetID, seq_num, timeout):
-        
-        pass
 
+    def runTraceroute(self, destinationAddress, packetID, seq_num, timeout):
+        icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
 
-    def runTraceroute(self, destination, max_hops=30):
-        for seq_num in range(1, max_hops + 1):
-            self.doOneTracerouteIteration(destination, 1, seq_num, 1)
+        for ttl in range(1, 30):
+            timeSent = self.sendOnePing(icmpSocket, destinationAddress, packetID, seq_num, ttl)
+
+            try:
+                timeRecieved, ttl, packetLength, seq, addr = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout, seq_num)
+            except:
+                pass
+
+            icmpSocket.close()
+
+            if addr is not None:
+                print("Hop {}: {}".format(ttl, addr))
+
+            if addr == destinationAddress:
+                break
+
+            time.sleep(1)
 
 
     def __init__(self, args):
-        print(f'Traceroute to: {args.hostname}...')
+        print('Traceroute to: %s...' % (args.hostname))
 
-        # Look up hostname, resolving it to an IP address
         try:
-            destination_address = socket.gethostbyname(args.hostname)
+            destinationAddress = socket.gethostbyname(args.hostname)
         except socket.gaierror:
             print("Hostname not known. Lookup failed.")
             exit(-1)
 
-        # Perform the traceroute
-        max_hops = 30
-        self.runTraceroute(destination_address, max_hops)
+        for i in range(1):
+            self.runTraceroute(destinationAddress, i, i, 1)
+            time.sleep(1)
+
 
 # DONE
 class WebServer(NetworkApplication):
