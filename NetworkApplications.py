@@ -268,15 +268,23 @@ class Traceroute(NetworkApplication):
             except:
                 pass
 
-            icmpSocket.close()
 
             if addr is not None:
-                print("Hop {}: {}".format(ttl, addr))
+                # print("Hop {}: {}".format(ttl, addr))
+                print(destinationAddress)
+                print(packetLength) ### THIS IS NONE FOR SOME REASON, BREAKS printOneResult
+                print(time.time())
+                print(seq_num)
+                print(ttl) ### THIS IS NONE FOR SOME REASON, BREAKS printOneResult
+                print(socket.gethostbyaddr(destinationAddress)[0])
+                self.printOneResult(destinationAddress, packetLength, time.time(), seq_num, ttl, socket.gethostbyaddr(destinationAddress)[0])
 
             if addr == destinationAddress:
                 break
 
             time.sleep(1)
+        
+        icmpSocket.close()
 
 
     def __init__(self, args):
