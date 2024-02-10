@@ -213,31 +213,35 @@ class ICMPPing(NetworkApplication):
 class Traceroute(NetworkApplication):
 
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
+        # 1. Wait for the socket to receive a reply
+        # 2. If reply received, record time of receipt, otherwise, handle timeout
+        # 3. Unpack the imcp and ip headers for useful information, including Identifier, TTL, sequence number 
+        # 5. Check that the Identifier (ID) matches between the request and reply
+        # 6. Return time of receipt, TTL, packetSize, sequence number
+
         icmpSocket.settimeout(timeout)
     
         try:
-            receivedPacket, addr = icmpSocket.recvfrom(1024)
+            recievedPacket, addr = icmpSocket.recvfrom(1024)
             timeReceived = time.time()
 
-            # Fetch the IP header from the received packet
-            ipHeader = receivedPacket[:20]
-
-            # Unpack the IP header to extract TTL
-            ttl = struct.unpack("B", ipHeader[8:9])[0]
-
             # Fetch the ICMP header from the received packet
-            icmpHeader = receivedPacket[20:28]
+            icmpHeader = recievedPacket[20:28]
 
             # Unpack the ICMP header to extract information
             type, code, checksum, packetID, seq = struct.unpack("bbHHh", icmpHeader)
 
-            # Check if the packet is an ICMP Time Exceeded and has the correct ID
-            if type == 11 and packetID == ID:
-                return timeReceived, ttl
-
+            # Check if the packet is an ICMP Echo Reply and has the correct ID
+            if type == 0 and packetID == ID:
+                packetLength = len(recievedPacket)
+                ttl = struct.unpack("bb", recievedPacket[8:10])[1]
+                return timeReceived, ttl, packetLength, seq
+            
         except socket.timeout:
-            print(f"{seq_num}: *")
+            print("Error, request timed-out.")
             return None
+
+        pass
 
     def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num):
         # 1. Build ICMP header
@@ -258,40 +262,11 @@ class Traceroute(NetworkApplication):
         # 5. Return time of sending
         return time.time()
 
+    # set the ttl to the seq_num and send a ping with said ttl, on reciept, grab the ip/hostname and print other info
+    # if no response, print a '*'
     def doOneTracerouteIteration(self, destinationAddress, packetID, seq_num, timeout):
-        # 1. Create ICMP/UDP socket
-        if args.protocol == "udp":
-            # UDP SOCKET CREATION HERE (TODO)
-            exit(-1)
-        else:
-            my_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-
-        # 2. Set the TTL for the socket
-        my_socket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, seq_num + 1)
-
-        # 3. Call sendOnePing function
-        timeSent = self.sendOnePing(my_socket, destinationAddress, packetID, seq_num)
-
-        # 4. Call receiveOnePing function
-        try:
-            timeReceived, ttl,  = self.receiveOnePing(socket, destinationAddress, packetID, timeout, seq_num)
-        except:
-            # Handle the exception where variables may be null due to a failed request
-            pass
-
-        # 5. Close ICMP socket
-        my_socket.close()
-
-        # 6. Print out the result
-        try:
-            if timeReceived is not None:
-                delay = (timeReceived - timeSent) * 1000
-                self.printOneTraceRouteIteration(self, ttl, destinationAddress, measurements, socket.gethostbyaddr(destinationAddress))
-                self.printOneResult(destinationAddress, packetLength, time.time(), seq_num, ttl, socket.gethostbyaddr(destinationAddress))
-                
-        except:
-            # Handle the exception where variables may be null due to a failed request
-            pass
+        
+        pass
 
 
     def runTraceroute(self, destination, max_hops=30):
@@ -365,6 +340,9 @@ class Proxy(NetworkApplication):
 
     def __init__(self, args):
         print('Web Proxy starting on port: %i...' % (args.port))
+
+
+
 
 # Do not delete or modify the code below
 if __name__ == "__main__":
