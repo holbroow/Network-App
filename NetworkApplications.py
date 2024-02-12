@@ -209,7 +209,7 @@ class ICMPPing(NetworkApplication):
             self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
             
-# TODO NEED TO FIGURE OUT THE PRINT STATENMENT AND HANDLING THE HOPS VS THE END OF THE ROUTE
+# DONE
 class Traceroute(NetworkApplication):
 	# 	Start with a TTL of 1
 	# 	send imp echo request (same as ping) to destination with the current TTL
@@ -258,47 +258,57 @@ class Traceroute(NetworkApplication):
 
 
     def doOneTracerouteIteration(self, destinationAddress, packetID, seq_num, timeout, icmpSocket, ttl, timeoutCount, hop):
+        measurements = []
+        ttlConstant = ttl
 
-        timeSent = self.sendOnePing(icmpSocket, destinationAddress, packetID, seq_num, ttl)
-
-        try:
-            timeRecieved, ttl, packetLength, seq, addr = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout, seq_num)
+        for i in range(3):
+            timeSent = self.sendOnePing(icmpSocket, destinationAddress, packetID, seq_num, ttlConstant)
 
             try:
-                hostname = socket.gethostbyaddr(addr)[0]
+                timeReceived, ttl, packetLength, seq, addr = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout, seq_num)
+                
+                delay = (timeReceived - timeSent) * 1000
+                measurements.append(delay)
+
+                try:
+                    hostname = socket.gethostbyaddr(addr)[0]
+                except:
+                    hostname = ""
             except:
-                hostname = ""
-        except:
-            pass
+                timeReceived = None
+                addr = None
+                
+                # pass
 
-        if timeRecieved == None:
-            timeoutCount += 1
+            if timeReceived == None:
+                timeoutCount += 1
 
-            if timeoutCount == 1:
-                print(f"Hop {hop}:  * ", end="")
-            elif timeoutCount == 3:
-                print(" * ")
-            else:
-                print(" * ", end="")
+                #print(f"{hop}  * ")
 
-            if timeoutCount != 3:
-                self.doOneTracerouteIteration(destinationAddress, packetID, seq_num, timeout, icmpSocket, ttl, timeoutCount, hop)
+                if timeoutCount == 1:
+                    print(f"{hop}  * ", end="")
+                elif timeoutCount == 3:
+                    print(" * ")
+                else:
+                    print(" * ", end="")
 
-        if addr == destinationAddress:
-            print("Hop {}: {} / {}".format(hop, addr, hostname))
-            exit(0)
+            if addr == destinationAddress:
+                try:
+                    hostname = socket.gethostbyaddr(addr)[0]
+                except:
+                    hostname = addr
 
+                self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
+                exit(0)
+
+            if addr is not None:
+                try:
+                    hostname = socket.gethostbyaddr(addr)[0]
+                except:
+                    hostname = addr
+                    
         if addr is not None:
-            print("Hop {}: {} / {}".format(hop, addr, hostname))
-            # print(destinationAddress)
-            # print(packetLength) ### THIS IS NONE FOR SOME REASON, BREAKS printOneResult
-            # print(time.time())
-            # print(seq_num)
-            # print(ttl) ### THIS IS NONE FOR SOME REASON, BREAKS printOneResult
-            # print(socket.gethostbyaddr(destinationAddress)[0])
-
-            ## TODO: fix this (create and use measurements)
-            # self.printOneTraceRouteIteration(ttl, destinationAddress, measurements, socket.gethostbyaddr(destinationAddress)[0])
+            self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
 
         time.sleep(0.1)
 
@@ -326,7 +336,6 @@ class Traceroute(NetworkApplication):
         for i in range(1):
             self.runTraceroute(destinationAddress, i, i, 1)
             time.sleep(1)
-
 
 # DONE
 class WebServer(NetworkApplication):
@@ -374,6 +383,8 @@ class WebServer(NetworkApplication):
             connection_handled = True
         # 5. Close server socket
         web_socket.close()
+
+
 
 # TODO
 class Proxy(NetworkApplication):
