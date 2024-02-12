@@ -209,7 +209,7 @@ class ICMPPing(NetworkApplication):
             self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
             
-# DONE
+# TODO support UDP protocol aswell
 class Traceroute(NetworkApplication):
 	# 	Start with a TTL of 1
 	# 	send imp echo request (same as ping) to destination with the current TTL
@@ -333,9 +333,13 @@ class Traceroute(NetworkApplication):
             print("Hostname not known. Lookup failed.")
             exit(-1)
 
+        # TODO deal with args.protocol here
         for i in range(1):
             self.runTraceroute(destinationAddress, i, i, 1)
             time.sleep(1)
+
+
+
 
 # DONE
 class WebServer(NetworkApplication):
@@ -388,6 +392,8 @@ class WebServer(NetworkApplication):
 
 # TODO
 class Proxy(NetworkApplication):
+
+
 
     def __init__(self, args):
         print('Web Proxy starting on port: %i...' % (args.port))
