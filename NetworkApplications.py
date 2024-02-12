@@ -326,7 +326,7 @@ class Traceroute(NetworkApplication):
             icmpSocket.close()
 
         elif protocol == "udp":
-            udpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW)
+            udpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname('udp'))
             
             pass
         
@@ -345,15 +345,16 @@ class Traceroute(NetworkApplication):
             print("Hostname not known. Lookup failed.")
             exit(-1)
 
-        try:
-            timeout = args.timeout
-        except:
-            tiemout = 1
+        timeout = args.timeout
 
         try:
             protocol = args.protocol
         except:
             protocol = "icmp"
+
+        #debug
+        print(timeout)
+        print(protocol)
 
         # TODO deal with args.protocol here
         for i in range(1):
