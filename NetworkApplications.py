@@ -110,6 +110,7 @@ class NetworkApplication:
 # DONE
 class ICMPPing(NetworkApplication):
 
+
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
         # 1. Wait for the socket to receive a reply
         # 2. If reply received, record time of receipt, otherwise, handle timeout
@@ -213,7 +214,7 @@ class ICMPPing(NetworkApplication):
 class Traceroute(NetworkApplication):
 	# 	Start with a TTL of 1
 	# 	send imp echo request (same as ping) to destination with the current TTL
-	# 	wait fro response
+	# 	wait fo response
 	# 	 	if response == time exceeded message, print details such as address and increase ttl, repeat
 	# 	 	else if there is an echo reply, reached destination print and exit
 	# 	repeat 2-4 until said echo reply is received
@@ -313,14 +314,25 @@ class Traceroute(NetworkApplication):
         time.sleep(0.1)
 
 
-    def runTraceroute(self, destinationAddress, packetID, seq_num, timeout):
-        icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+    def runTraceroute(self, destinationAddress, packetID, seq_num, timeout, protocol):
+        if protocol == "icmp":
+            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+            icmpSocket.settimeout(timeout)
 
-        for hop in range (1, 31):
-            timeoutCount = 0
-            self.doOneTracerouteIteration(destinationAddress, packetID, seq_num, timeout, icmpSocket, hop, timeoutCount, hop)
+            for hop in range (1, 31):
+                timeoutCount = 0
+                self.doOneTracerouteIteration(destinationAddress, packetID, seq_num, timeout, icmpSocket, hop, timeoutCount, hop)
         
-        icmpSocket.close()
+            icmpSocket.close()
+
+        elif protocol == "udp":
+            udpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW)
+            
+            pass
+        
+        else:
+            print("Protocol argument invalid.")
+            exit(-1)
 
 
     def __init__(self, args):
@@ -333,9 +345,19 @@ class Traceroute(NetworkApplication):
             print("Hostname not known. Lookup failed.")
             exit(-1)
 
+        try:
+            timeout = args.timeout
+        except:
+            tiemout = 1
+
+        try:
+            protocol = args.protocol
+        except:
+            protocol = "icmp"
+
         # TODO deal with args.protocol here
         for i in range(1):
-            self.runTraceroute(destinationAddress, i, i, 1)
+            self.runTraceroute(destinationAddress, i, i, timeout, protocol)
             time.sleep(1)
 
 
@@ -387,8 +409,6 @@ class WebServer(NetworkApplication):
             connection_handled = True
         # 5. Close server socket
         web_socket.close()
-
-
 
 # TODO
 class Proxy(NetworkApplication):
