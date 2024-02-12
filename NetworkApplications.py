@@ -298,9 +298,10 @@ class Traceroute(NetworkApplication):
                     hostname = socket.gethostbyaddr(addr)[0]
                 except:
                     hostname = addr
-
-                self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
-                exit(0)
+                    
+                if i == 2:
+                    self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
+                    exit(0)
 
             if addr is not None:
                 try:
