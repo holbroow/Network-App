@@ -210,27 +210,18 @@ class ICMPPing(NetworkApplication):
             self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
             
-# TODO support UDP protocol aswell
+# TODO fix bug where some hops that dont give a reply to UDP, but do to ICMP
 class Traceroute(NetworkApplication):
-	# 	Start with a TTL of 1
-	# 	send imp echo request (same as ping) to destination with the current TTL
-	# 	wait fo response
-	# 	 	if response == time exceeded message, print details such as address and increase ttl, repeat
-	# 	 	else if there is an echo reply, reached destination print and exit
-	# 	repeat 2-4 until said echo reply is received
-	# 	make sure to handle exceptions where there are no responses, in this case, print a * and move on
 
-    def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
-        icmpSocket.settimeout(timeout)
-    
+    def receiveOnePing(self, mySocket, ID, timeout):
         try:
-            recievedPacket, addr = icmpSocket.recvfrom(1024)
+            recievedPacket, addr = mySocket.recvfrom(1024)
             timeReceived = time.time()
 
             icmpHeader = recievedPacket[20:28]
             type, code, checksum, packetID, seq = struct.unpack("bbHHh", icmpHeader)
 
-            if type == 0 or type == 11 and packetID == ID:
+            if type == 0 or type == 11 or (type == 3 and code == 3) and packetID == ID:
                 packetLength = len(recievedPacket)
                 ttl = struct.unpack("bb", recievedPacket[8:10])[1]
                 return timeReceived, ttl, packetLength, seq, addr[0]
@@ -238,8 +229,20 @@ class Traceroute(NetworkApplication):
         except socket.timeout:
             return None, None, None, None, None
 
+    def sendOnePingUDP(self, mySocket, destinationAddress, ID, seq_num, ttl):
+        header = struct.pack("!HHHH", ID, seq_num, 0, 0)
+        data = b'Hello, Server!'
+        packet = header + data
 
-    def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num, ttl):
+        try:
+            mySocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
+            mySocket.sendto(packet, (destinationAddress, 80))
+        except Exception as e:
+            print("Error sending UDP packet:", e)
+
+        return time.time()
+
+    def sendOnePing(self, mySocket, destinationAddress, ID, seq_num, ttl):
         header = struct.pack("bbHHh", 8, 0, 0, ID, seq_num)
         data = b'Hello, Server!'
         packet = header + data
@@ -250,23 +253,22 @@ class Traceroute(NetworkApplication):
         packet = header + data
 
         try:
-            icmpSocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
-            icmpSocket.sendto(packet, (destinationAddress, 80))
+            mySocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
+            mySocket.sendto(packet, (destinationAddress, 80))
         except:
             pass
 
         return time.time()
 
-
-    def doOneTracerouteIteration(self, destinationAddress, packetID, seq_num, timeout, icmpSocket, ttl, timeoutCount, hop):
+    def doOneTraceRouteIterationUDP(self, destinationAddress, packetID, seq_num, timeout, mySocketICMP, mySocketUDP, ttl, timeoutCount, hop):
         measurements = []
         ttlConstant = ttl
-
+            
         for i in range(3):
-            timeSent = self.sendOnePing(icmpSocket, destinationAddress, packetID, seq_num, ttlConstant)
+            timeSent = self.sendOnePingUDP(mySocketUDP, destinationAddress, packetID, seq_num, ttlConstant)
 
             try:
-                timeReceived, ttl, packetLength, seq, addr = self.receiveOnePing(icmpSocket, destinationAddress, packetID, timeout, seq_num)
+                timeReceived, ttl, packetLength, seq, addr = self.receiveOnePing(mySocketICMP, packetID, timeout)
                 
                 delay = (timeReceived - timeSent) * 1000
                 measurements.append(delay)
@@ -312,8 +314,59 @@ class Traceroute(NetworkApplication):
         if addr is not None:
             self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
 
-        time.sleep(0.1)
+    def doOneTraceRouteIteration(self, destinationAddress, packetID, seq_num, timeout, mySocket, ttl, timeoutCount, hop):
+        measurements = []
+        ttlConstant = ttl
+            
+        for i in range(3):
+            timeSent = self.sendOnePing(mySocket, destinationAddress, packetID, seq_num, ttlConstant)
 
+            try:
+                timeReceived, ttl, packetLength, seq, addr = self.receiveOnePing(mySocket, packetID, timeout)
+                
+                delay = (timeReceived - timeSent) * 1000
+                measurements.append(delay)
+
+                try:
+                    hostname = socket.gethostbyaddr(addr)[0]
+                except:
+                    hostname = ""
+            except:
+                timeReceived = None
+                addr = None
+                
+                # pass
+
+            if timeReceived == None:
+                timeoutCount += 1
+
+                #print(f"{hop}  * ")
+
+                if timeoutCount == 1:
+                    print(f"{hop}  * ", end="")
+                elif timeoutCount == 3:
+                    print(" * ")
+                else:
+                    print(" * ", end="")
+
+            if addr == destinationAddress:
+                try:
+                    hostname = socket.gethostbyaddr(addr)[0]
+                except:
+                    hostname = addr
+                    
+                if i == 2:
+                    self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
+                    exit(0)
+
+            if addr is not None:
+                try:
+                    hostname = socket.gethostbyaddr(addr)[0]
+                except:
+                    hostname = addr
+                    
+        if addr is not None:
+            self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
 
     def runTraceroute(self, destinationAddress, packetID, seq_num, timeout, protocol):
         if protocol == "icmp":
@@ -322,19 +375,26 @@ class Traceroute(NetworkApplication):
 
             for hop in range (1, 31):
                 timeoutCount = 0
-                self.doOneTracerouteIteration(destinationAddress, packetID, seq_num, timeout, icmpSocket, hop, timeoutCount, hop)
+                self.doOneTraceRouteIteration(destinationAddress, packetID, seq_num, timeout, icmpSocket, hop, timeoutCount, hop)
         
             icmpSocket.close()
 
         elif protocol == "udp":
-            udpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname('udp'))
-            
-            pass
+            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname('icmp'))
+            icmpSocket.settimeout(timeout)
+            udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udpSocket.settimeout(timeout)
+
+            for hop in range (1, 31):
+                timeoutCount = 0
+                self.doOneTraceRouteIterationUDP(destinationAddress, packetID, seq_num, timeout, icmpSocket, udpSocket, hop, timeoutCount, hop)
+        
+            udpSocket.close()
+
         
         else:
             print("Protocol argument invalid.")
             exit(-1)
-
 
     def __init__(self, args):
         print('Traceroute to: %s...' % (args.hostname))
@@ -362,15 +422,12 @@ class Traceroute(NetworkApplication):
             self.runTraceroute(destinationAddress, i, i, timeout, protocol)
             time.sleep(1)
 
-
-
-
 # DONE
 class WebServer(NetworkApplication):
     
-    def handleRequest(self, client_socket):
+    def handleRequest(self, mySocket):
         # 1. Receive request message from the client on connection socket
-        request = client_socket.recv(1024).decode('utf-8')
+        request = mySocket.recv(1024).decode('utf-8')
         # 2. Extract the path of the requested object from the message (second part of the HTTP header)
         lines = request.split('\n')
         filename = lines[0].split()[1]
@@ -388,37 +445,78 @@ class WebServer(NetworkApplication):
         final_response = response + content
         # 5. Send the correct HTTP response error
         # 6. Send the content of the file to the socket
+        mySocket.send(final_response)
+        # 7. Close the connection socket
+        mySocket.close()
+
+
+    def __init__(self, args):
+        print('Web Server starting on port: %i...' % (args.port))
+        # 1. Create server socket
+        mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # 2. Bind the server socket to server address and server port
+        mySocket.bind(("127.0.0.1", args.port))
+        # 3. Continuously listen for connections to server socket
+        mySocket.listen(1)
+        print('Listening on port %i...' % (args.port))
+        # 4. When a connection is accepted, call handleRequest function, passing new connection socket
+        while ():
+            clientSocket, addr = mySocket.accept()
+            print(f"Accepted connection from: {addr[0]}:{addr[1]}")
+            self.handleRequest(mySocket)
+        # 5. Close server socket
+        mySocket.close()
+
+
+
+# TODO
+class Proxy(NetworkApplication):
+
+    
+    def handleRequest(self, client_socket):
+        # 1. Receive request message from the client on connection socket
+        request = client_socket.recv(1024).decode('utf-8')
+        # 2. Extract the path of the requested object from the message (second part of the HTTP header)
+        lines = request.split('\n')
+        filename = lines[0].split()[1]
+        if filename == '/':
+            filename = '/index.html'
+        # 3. Read the corresponding file from disk
+            
+        #### TODO HERE i need to find if the requested url file is present, and if it is, fetch it, if not go to the url specified, fetch, and provide
+        try:
+            with open(os.getcwd() + filename, 'rb') as file:
+                content = file.read()
+            response = 'HTTP/1.0 200 OK\n\n'.encode('utf-8')
+        except FileNotFoundError:
+            content = 'File Not Found'.encode('utf-8')
+            response = 'HTTP/1.0 404 NOT FOUND\n\n'.encode('utf-8')
+        # 4. Store in temporary buffer
+        final_response = response + content
+        # 5. Send the correct HTTP response error
+        # 6. Send the content of the file to the socket
         client_socket.send(final_response)
         # 7. Close the connection socket
         client_socket.close()
 
 
     def __init__(self, args):
-        print('Web Server starting on port: %i...' % (args.port))
+        ip = "127.0.0.1"
+        print('Web Proxy starting on %s:%i...' % (ip, args.port))
         # 1. Create server socket
-        web_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        my_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # 2. Bind the server socket to server address and server port
-        web_socket.bind(("127.0.0.1", args.port))
+        my_socket.bind((ip, args.port))
         # 3. Continuously listen for connections to server socket
-        web_socket.listen(1)
+        my_socket.listen(1)
         print('Listening on port %i...' % (args.port))
         # 4. When a connection is accepted, call handleRequest function, passing new connection socket
-        connection_handled = False
-        while (connection_handled == False):
-            clientSocket, addr = web_socket.accept()
+        while (1==1):
+            client_socket, addr = my_socket.accept()
             print(f"Accepted connection from: {addr[0]}:{addr[1]}")
-            self.handleRequest(clientSocket)
-            connection_handled = True
+            self.handleRequest(client_socket)
         # 5. Close server socket
-        web_socket.close()
-
-# TODO
-class Proxy(NetworkApplication):
-
-
-
-    def __init__(self, args):
-        print('Web Proxy starting on port: %i...' % (args.port))
+        my_socket.close()
 
 
 
