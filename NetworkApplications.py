@@ -477,50 +477,66 @@ class WebServer(NetworkApplication):
 # TODO
 class Proxy(NetworkApplication):
 
-    def handleRequest(self, client_socket):
-        # 1. Receive request message from the client on connection socket
-        request = client_socket.recv(1024).decode('utf-8')
-        # 2. Extract the path of the requested object from the message (second part of the HTTP header)
-        lines = request.split('\n')
-        filename = lines[0].split()[1]
-        if filename == '/':
-            filename = '/index.html'
-        # 3. Read the corresponding file from disk
+    def handleRequest(self, mySocket):
+        request = mySocket.recv(1024)
+        unpacked = request.decode()
+
+        if request in self.cache:
+            print("File already in cache, read from cache.")
+            mySocket.sendall(self.cache[request])
+        else:
+            hostname = unpacked.split()[4]
+
+            proxySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            proxySocket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+
+            address = socket.gethostbyname(hostname)
         
-        #### TODO HERE i need to find if the requested url file is present, and if it is, fetch it, if not go to the url specified, fetch, and provide
-        try:
-            with open(os.getcwd() + filename, 'rb') as file:
-                content = file.read()
-            response = 'HTTP/1.0 200 OK\n\n'.encode('utf-8')
-        except FileNotFoundError:
-            content = 'File Not Found'.encode('utf-8')
-            response = 'HTTP/1.0 404 NOT FOUND\n\n'.encode('utf-8')
-        # 4. Store in temporary buffer
-        final_response = response + content
-        # 5. Send the correct HTTP response error
-        # 6. Send the content of the file to the socket
-        client_socket.send(final_response)
-        # 7. Close the connection socket
-        client_socket.close()
+            proxySocket.connect((address, 80))
+            proxySocket.sendall(request)
+
+            buffer = b''
+            receiving = True
+
+            while (receiving):
+                try:
+                    data = proxySocket.recv(1024)
+                    print("Recieved packet!")
+                    if not data:
+                        receiving = False
+                    else:
+                        buffer += data
+                except TimeoutError:
+                    buffer = b'HTTP/1.1 408 Timeout\r\nContent-Type: text/html\r\n\r\n'
+                    buffer += b'<html><body><p>408 Timeout<p><body><html>'
+                    print("Timed out.")
+                    pass
+
+            print("New file, cached.")
+            self.cache[request] = buffer
+            mySocket.sendall(self.cache[request])
 
 
     def __init__(self, args):
-        ip = "127.0.0.1"
-        print('Web Proxy starting on %s:%i...' % (ip, args.port))
-        # 1. Create server socket
-        my_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # 2. Bind the server socket to server address and server port
-        my_socket.bind((ip, args.port))
-        # 3. Continuously listen for connections to server socket
-        my_socket.listen(1)
+        print('Web Server starting on port: %i...' % (args.port))
+        self.cache = {}
+
+        mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        mySocket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+
+        mySocket.bind(("127.0.0.1", args.port))
+
+        mySocket.listen()
         print('Listening on port %i...' % (args.port))
-        # 4. When a connection is accepted, call handleRequest function, passing new connection socket
-        while (1==1):
-            client_socket, addr = my_socket.accept()
+
+        live = True
+        while (live):
+            clientSocket, addr = mySocket.accept()
             print(f"Accepted connection from: {addr[0]}:{addr[1]}")
-            self.handleRequest(client_socket)
-        # 5. Close server socket
-        my_socket.close()
+            self.handleRequest(clientSocket)
+            #live = False
+
+        mySocket.close()
 
 
 
