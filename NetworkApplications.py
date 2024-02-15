@@ -107,6 +107,7 @@ class NetworkApplication:
         else:
             print("%d %s" % (ttl, latencies))
 
+
 # DONE
 class ICMPPing(NetworkApplication):
 
@@ -209,7 +210,7 @@ class ICMPPing(NetworkApplication):
             # Call doOnePing function, approximately every second
             self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
-            
+  
 # TODO fix bug where some hops that dont give a reply to UDP, but do to ICMP
 class Traceroute(NetworkApplication):
 
@@ -380,7 +381,7 @@ class Traceroute(NetworkApplication):
             icmpSocket.close()
 
         elif protocol == "udp":
-            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.getprotobyname('icmp'))
+            icmpSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
             icmpSocket.settimeout(timeout)
             udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             udpSocket.settimeout(timeout)
@@ -427,25 +428,28 @@ class WebServer(NetworkApplication):
     
     def handleRequest(self, mySocket):
         # 1. Receive request message from the client on connection socket
-        request = mySocket.recv(1024).decode('utf-8')
+        request = mySocket.recv(1024).decode()
         # 2. Extract the path of the requested object from the message (second part of the HTTP header)
         lines = request.split('\n')
         filename = lines[0].split()[1]
-        if filename == '/':
-            filename = '/index.html'
+        '''if filename == '/':
+            filename = '/index.html'''
         # 3. Read the corresponding file from disk
         try:
-            with open(os.getcwd() + filename, 'rb') as file:
+            response = 'HTTP/1.0 200 OK\r\n\r\n'
+            with open('.' + filename, 'r') as file:
                 content = file.read()
-            response = 'HTTP/1.0 200 OK\n\n'.encode('utf-8')
+            
         except FileNotFoundError:
-            content = 'File Not Found'.encode('utf-8')
-            response = 'HTTP/1.0 404 NOT FOUND\n\n'.encode('utf-8')
+            content = 'File Not Found'.encode()
+            response = 'HTTP/1.0 404 NOT FOUND\r\n\r\n'.encode()
         # 4. Store in temporary buffer
         final_response = response + content
+        #print(final_response)
+        res = final_response.encode()
         # 5. Send the correct HTTP response error
         # 6. Send the content of the file to the socket
-        mySocket.send(final_response)
+        mySocket.send(res)
         # 7. Close the connection socket
         mySocket.close()
 
@@ -454,25 +458,25 @@ class WebServer(NetworkApplication):
         print('Web Server starting on port: %i...' % (args.port))
         # 1. Create server socket
         mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        mySocket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
         # 2. Bind the server socket to server address and server port
         mySocket.bind(("127.0.0.1", args.port))
         # 3. Continuously listen for connections to server socket
-        mySocket.listen(1)
+        mySocket.listen()
         print('Listening on port %i...' % (args.port))
         # 4. When a connection is accepted, call handleRequest function, passing new connection socket
-        while ():
+        live = True
+        while (live):
             clientSocket, addr = mySocket.accept()
             print(f"Accepted connection from: {addr[0]}:{addr[1]}")
-            self.handleRequest(mySocket)
+            self.handleRequest(clientSocket)
+            live = False
         # 5. Close server socket
         mySocket.close()
-
-
 
 # TODO
 class Proxy(NetworkApplication):
 
-    
     def handleRequest(self, client_socket):
         # 1. Receive request message from the client on connection socket
         request = client_socket.recv(1024).decode('utf-8')
@@ -482,7 +486,7 @@ class Proxy(NetworkApplication):
         if filename == '/':
             filename = '/index.html'
         # 3. Read the corresponding file from disk
-            
+        
         #### TODO HERE i need to find if the requested url file is present, and if it is, fetch it, if not go to the url specified, fetch, and provide
         try:
             with open(os.getcwd() + filename, 'rb') as file:
