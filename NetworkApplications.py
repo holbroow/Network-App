@@ -108,7 +108,6 @@ class NetworkApplication:
             print("%d %s" % (ttl, latencies))
 
 
-# DONE
 class ICMPPing(NetworkApplication):
 
 
@@ -211,7 +210,6 @@ class ICMPPing(NetworkApplication):
             self.doOnePing(destinationAddress, i, i, 1)
             time.sleep(1)
   
-# TODO fix bug where some hops that dont give a reply to UDP, but do to ICMP
 class Traceroute(NetworkApplication):
 
     def receiveOnePing(self, mySocket, ID, timeout):
@@ -222,7 +220,7 @@ class Traceroute(NetworkApplication):
             icmpHeader = recievedPacket[20:28]
             type, code, checksum, packetID, seq = struct.unpack("bbHHh", icmpHeader)
 
-            if type == 0 or type == 11 or (type == 3 and code == 3) and packetID == ID:
+            if type == 0 or type == 11 or type == 3 and packetID == ID:
                 packetLength = len(recievedPacket)
                 ttl = struct.unpack("bb", recievedPacket[8:10])[1]
                 return timeReceived, ttl, packetLength, seq, addr[0]
@@ -237,7 +235,7 @@ class Traceroute(NetworkApplication):
 
         try:
             mySocket.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
-            mySocket.sendto(packet, (destinationAddress, 80))
+            mySocket.sendto(packet, (destinationAddress, 33434 + ttl))
         except Exception as e:
             print("Error sending UDP packet:", e)
 
@@ -264,12 +262,23 @@ class Traceroute(NetworkApplication):
     def doOneTraceRouteIterationUDP(self, destinationAddress, packetID, seq_num, timeout, mySocketICMP, mySocketUDP, ttl, timeoutCount, hop):
         measurements = []
         ttlConstant = ttl
+        timeReceivedB = None
+        ttlB = None
+        packetLengthB = None
+        seqB = None
+        addrB = None
             
         for i in range(3):
             timeSent = self.sendOnePingUDP(mySocketUDP, destinationAddress, packetID, seq_num, ttlConstant)
 
             try:
                 timeReceived, ttl, packetLength, seq, addr = self.receiveOnePing(mySocketICMP, packetID, timeout)
+                if addr != None:
+                    timeReceivedB = timeReceived
+                    ttlB = ttl
+                    packetLengthB = packetLength
+                    seqB = seq
+                    addrB = addr
                 
                 delay = (timeReceived - timeSent) * 1000
                 measurements.append(delay)
@@ -278,16 +287,13 @@ class Traceroute(NetworkApplication):
                     hostname = socket.gethostbyaddr(addr)[0]
                 except:
                     hostname = ""
+                    
             except:
                 timeReceived = None
                 addr = None
-                
-                # pass
 
             if timeReceived == None:
                 timeoutCount += 1
-
-                #print(f"{hop}  * ")
 
                 if timeoutCount == 1:
                     print(f"{hop}  * ", end="")
@@ -296,24 +302,31 @@ class Traceroute(NetworkApplication):
                 else:
                     print(" * ", end="")
 
-            if addr == destinationAddress:
-                try:
-                    hostname = socket.gethostbyaddr(addr)[0]
-                except:
-                    hostname = addr
-                    
-                if i == 2:
-                    self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
-                    exit(0)
-
-            if addr is not None:
-                try:
-                    hostname = socket.gethostbyaddr(addr)[0]
-                except:
-                    hostname = addr
+        if addr == destinationAddress:
+            try:
+                hostname = socket.gethostbyaddr(addr)[0]
+            except:
+                hostname = addr
+                
+            if i == 2:
+                self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
+                exit(0)
                     
         if addr is not None:
+            try:
+                hostname = socket.gethostbyaddr(addr)[0]
+            except:
+                hostname = addr
+                
             self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
+
+        elif addr is None and addr != destinationAddress:
+            try:
+                hostname = socket.gethostbyaddr(addrB)[0]
+            except:
+                hostname = addrB
+            if addrB is not None:
+                self.printOneTraceRouteIteration(hop, addrB, measurements, hostname)
 
     def doOneTraceRouteIteration(self, destinationAddress, packetID, seq_num, timeout, mySocket, ttl, timeoutCount, hop):
         measurements = []
@@ -335,13 +348,9 @@ class Traceroute(NetworkApplication):
             except:
                 timeReceived = None
                 addr = None
-                
-                # pass
 
             if timeReceived == None:
                 timeoutCount += 1
-
-                #print(f"{hop}  * ")
 
                 if timeoutCount == 1:
                     print(f"{hop}  * ", end="")
@@ -359,14 +368,13 @@ class Traceroute(NetworkApplication):
                 if i == 2:
                     self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
                     exit(0)
-
-            if addr is not None:
-                try:
-                    hostname = socket.gethostbyaddr(addr)[0]
-                except:
-                    hostname = addr
                     
         if addr is not None:
+            try:
+                hostname = socket.gethostbyaddr(addr)[0]
+            except:
+                hostname = addr
+        
             self.printOneTraceRouteIteration(hop, addr, measurements, hostname)
 
     def runTraceroute(self, destinationAddress, packetID, seq_num, timeout, protocol):
@@ -423,7 +431,6 @@ class Traceroute(NetworkApplication):
             self.runTraceroute(destinationAddress, i, i, timeout, protocol)
             time.sleep(1)
 
-# DONE
 class WebServer(NetworkApplication):
     
     def handleRequest(self, mySocket):
@@ -474,7 +481,6 @@ class WebServer(NetworkApplication):
         # 5. Close server socket
         mySocket.close()
 
-# TODO
 class Proxy(NetworkApplication):
 
     def handleRequest(self, mySocket):
@@ -537,8 +543,6 @@ class Proxy(NetworkApplication):
             #live = False
 
         mySocket.close()
-
-
 
 
 # Do not delete or modify the code below
