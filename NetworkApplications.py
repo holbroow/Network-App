@@ -110,7 +110,6 @@ class NetworkApplication:
 
 class ICMPPing(NetworkApplication):
 
-
     def receiveOnePing(self, icmpSocket, destinationAddress, ID, timeout, seq_num):
         # 1. Wait for the socket to receive a reply
         # 2. If reply received, record time of receipt, otherwise, handle timeout
@@ -142,11 +141,10 @@ class ICMPPing(NetworkApplication):
 
         pass
 
-
     def sendOnePing(self, icmpSocket, destinationAddress, ID, seq_num):
         # 1. Build ICMP header
         header = struct.pack("bbHHh", 8, 0, 0, ID, seq_num)
-        data = b'Hello, Server!'
+        data = b'Hello Server! Here is a ping packet.'
         packet = header + data
 
         # 2. Checksum ICMP packet using given function
@@ -163,7 +161,6 @@ class ICMPPing(NetworkApplication):
         return time.time()
         
         pass
-
 
     def doOnePing(self, destinationAddress, packetID, seq_num, timeout):
         # 1. Create ICMP socket
@@ -191,7 +188,6 @@ class ICMPPing(NetworkApplication):
             pass
 
         pass
-
 
     def __init__(self, args):
         print('Ping to: %s...' % (args.hostname))
@@ -230,7 +226,7 @@ class Traceroute(NetworkApplication):
 
     def sendOnePingUDP(self, mySocket, destinationAddress, ID, seq_num, ttl):
         header = struct.pack("!HHHH", ID, seq_num, 0, 0)
-        data = b'Hello, Server!'
+        data = b'Hello Server! Here is a ping packet.'
         packet = header + data
 
         try:
@@ -243,7 +239,7 @@ class Traceroute(NetworkApplication):
 
     def sendOnePing(self, mySocket, destinationAddress, ID, seq_num, ttl):
         header = struct.pack("bbHHh", 8, 0, 0, ID, seq_num)
-        data = b'Hello, Server!'
+        data = b'Hello Server! Here is a ping packet.'
         packet = header + data
 
         checksum = self.checksum(packet)
@@ -434,32 +430,27 @@ class Traceroute(NetworkApplication):
 class WebServer(NetworkApplication):
     
     def handleRequest(self, mySocket):
-        # 1. Receive request message from the client on connection socket
         request = mySocket.recv(1024).decode()
-        # 2. Extract the path of the requested object from the message (second part of the HTTP header)
+
         lines = request.split('\n')
         filename = lines[0].split()[1]
-        '''if filename == '/':
-            filename = '/index.html'''
-        # 3. Read the corresponding file from disk
+        if filename == '/':
+            filename = '/index.html'
+
         try:
-            response = 'HTTP/1.0 200 OK\r\n\r\n'
+            response = 'HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n'
             with open('.' + filename, 'r') as file:
                 content = file.read()
             
         except FileNotFoundError:
-            content = 'File Not Found'.encode()
-            response = 'HTTP/1.0 404 NOT FOUND\r\n\r\n'.encode()
-        # 4. Store in temporary buffer
-        final_response = response + content
-        #print(final_response)
-        res = final_response.encode()
-        # 5. Send the correct HTTP response error
-        # 6. Send the content of the file to the socket
-        mySocket.send(res)
-        # 7. Close the connection socket
-        mySocket.close()
+            content = '404 Not Found'
+            response = response = 'HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n'
 
+        final_response = response + content
+        res = final_response.encode()
+        mySocket.send(res)
+
+        mySocket.close()
 
     def __init__(self, args):
         print('Web Server starting on port: %i...' % (args.port))
@@ -497,9 +488,13 @@ class Proxy(NetworkApplication):
             proxySocket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
 
             address = socket.gethostbyname(hostname)
-        
             proxySocket.connect((address, 80))
-            proxySocket.sendall(request)
+
+            try:
+                proxySocket.sendall(request)
+            except FileNotFoundError:
+                buffer = b'HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n'
+                buffer += b'<html><body><p>404 Not Found<p><body><html>'
 
             buffer = b''
             receiving = True
@@ -516,21 +511,20 @@ class Proxy(NetworkApplication):
                     buffer = b'HTTP/1.1 408 Timeout\r\nContent-Type: text/html\r\n\r\n'
                     buffer += b'<html><body><p>408 Timeout<p><body><html>'
                     print("Timed out.")
-                    pass
 
             print("New file, cached.")
             self.cache[request] = buffer
             mySocket.sendall(self.cache[request])
 
-
     def __init__(self, args):
         print('Web Server starting on port: %i...' % (args.port))
         self.cache = {}
+        ip = "127.0.0.1"
 
         mySocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         mySocket.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
 
-        mySocket.bind(("127.0.0.1", args.port))
+        mySocket.bind((ip, args.port))
 
         mySocket.listen()
         print('Listening on port %i...' % (args.port))
